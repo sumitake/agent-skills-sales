@@ -10,5 +10,6 @@ All notable changes to this project will be documented in this file.
 - Add behavioral fixtures, dependency-free structural validation, and clean-room overlap checking.
 - Bound overlap-checker memory and report retention while preserving exact, collision-safe counts.
 - Reject malformed source-audit and coexistence fixture types without crashing validation.
+- Fail closed on excessive repository traversal, decoder depth, invalid decoded link paths, mutable workflow-action literals, and impractical overlap windows.
 - Add public contribution, security-reporting, ownership, funding, dependency-update, and CodeQL configuration.
 - Require immutable commit pins for third-party GitHub Actions.

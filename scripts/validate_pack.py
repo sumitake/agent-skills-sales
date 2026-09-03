@@ -19,10 +19,16 @@ from urllib.parse import unquote
 
 MAX_FILES = 500
 MAX_TEXT_BYTES = 2 * 1024 * 1024
+MAX_JSON_DEPTH = 100
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 ACTION_USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
+ACTION_REFERENCE_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])"
+    r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@"
+    r"[^\s'\"#,}\]]+)"
+)
 PINNED_ACTION_RE = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$"
 )
@@ -108,12 +114,39 @@ def _load_json(path: Path, root: Path, errors: list[str]) -> Any | None:
     text = _read_text(path, root, errors)
     if text is None:
         return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                errors.append(
+                    f"{_display(path, root)}: JSON nesting exceeds the "
+                    f"{MAX_JSON_DEPTH}-level limit"
+                )
+                return None
+        elif character in "]}":
+            depth -= 1
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         errors.append(
             f"{_display(path, root)}:{exc.lineno}:{exc.colno}: invalid JSON: {exc.msg}"
         )
+        return None
+    except RecursionError:
+        errors.append(f"{_display(path, root)}: JSON nesting exceeds the decoder limit")
         return None
 
 
@@ -196,7 +229,7 @@ def parse_frontmatter(text: str, path: Path) -> tuple[dict[str, Any], str]:
     return data, body
 
 
-def _collect_entries(root: Path, errors: list[str]) -> list[Path]:
+def _collect_entries(root: Path, errors: list[str]) -> tuple[list[Path], bool]:
     entries: list[Path] = []
     for current, dirnames, filenames in os.walk(root, followlinks=False):
         base = Path(current)
@@ -225,8 +258,8 @@ def _collect_entries(root: Path, errors: list[str]) -> list[Path]:
                 )
         if len(entries) > MAX_FILES:
             errors.append(f".: repository has more than {MAX_FILES} inspected entries")
-            return entries
-    return entries
+            return entries, False
+    return entries, True
 
 
 def _extract_link_target(raw: str) -> str:
@@ -254,12 +287,20 @@ def _validate_markdown_links(root: Path, files: list[Path], errors: list[str]) -
             target_path = unquote(target.split("#", 1)[0].split("?", 1)[0])
             if not target_path:
                 continue
-            if Path(target_path).is_absolute():
+            try:
+                candidate = Path(target_path)
+                if candidate.is_absolute():
+                    errors.append(
+                        f"{_display(path, root)}: absolute local link is not portable: "
+                        f"{target!r}"
+                    )
+                    continue
+                resolved = (path.parent / candidate).resolve(strict=False)
+            except (OSError, ValueError) as exc:
                 errors.append(
-                    f"{_display(path, root)}: absolute local link is not portable: {target!r}"
+                    f"{_display(path, root)}: invalid local link path {target!r}: {exc}"
                 )
                 continue
-            resolved = (path.parent / target_path).resolve(strict=False)
             try:
                 resolved.relative_to(root)
             except ValueError:
@@ -273,7 +314,7 @@ def _validate_markdown_links(root: Path, files: list[Path], errors: list[str]) -
                 relative_to_skills = path.relative_to(skills_root)
                 skill_dir = skills_root / relative_to_skills.parts[0]
             except (ValueError, IndexError):
-                pass
+                skill_dir = None
             if skill_dir is not None:
                 try:
                     resolved.relative_to(skill_dir)
@@ -294,7 +335,13 @@ def _validate_markdown_links(root: Path, files: list[Path], errors: list[str]) -
 
 
 def _validate_workflow_action_pins(root: Path, errors: list[str]) -> None:
-    """Require immutable full-SHA references for every external workflow action."""
+    """Require immutable full-SHA references for every external action literal.
+
+    The global reference scan is deliberately independent of YAML key spelling,
+    indentation, quoting, flow mappings, or anchors. Canonical ``uses:`` lines
+    receive an additional closed-value check so dynamic and non-action values
+    fail closed without adding a YAML runtime dependency.
+    """
 
     workflows = root / ".github" / "workflows"
     if not workflows.is_dir() or workflows.is_symlink():
@@ -305,12 +352,24 @@ def _validate_workflow_action_pins(root: Path, errors: list[str]) -> None:
         text = _read_text(path, root, errors)
         if text is None:
             continue
+        checked: set[str] = set()
+        for match in ACTION_REFERENCE_RE.finditer(text):
+            reference = match.group(1)
+            checked.add(reference)
+            if not PINNED_ACTION_RE.fullmatch(reference):
+                line_number = text.count("\n", 0, match.start()) + 1
+                errors.append(
+                    f"{_display(path, root)}:{line_number}: external action must use "
+                    f"a lowercase 40-hex commit pin: {reference!r}"
+                )
         for line_number, line in enumerate(text.splitlines(), start=1):
             match = ACTION_USES_RE.match(line)
             if not match:
                 continue
             reference = match.group(1).strip("'\"")
             if reference.startswith("./"):
+                continue
+            if reference in checked:
                 continue
             if not PINNED_ACTION_RE.fullmatch(reference):
                 errors.append(
@@ -792,7 +851,14 @@ def _validate_coexistence(root: Path, errors: list[str]) -> int:
 def validate_pack(root: Path) -> tuple[list[str], dict[str, int]]:
     root = root.resolve()
     errors: list[str] = []
-    entries = _collect_entries(root, errors)
+    entries, inventory_complete = _collect_entries(root, errors)
+    if not inventory_complete:
+        return sorted(set(errors)), {
+            "skills": 0,
+            "skill_evals": 0,
+            "coexistence_evals": 0,
+            "entries": len(entries),
+        }
     version, declared_skills = _validate_pack_manifest(root, errors)
 
     skills_root = root / "skills"

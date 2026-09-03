@@ -23,6 +23,7 @@ DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_TOTAL_BYTES = 32 * 1024 * 1024
 DEFAULT_MAX_TOKENS = 500_000
 DEFAULT_MAX_REPORTS = 100
+MAX_WINDOW = 64
 DIGEST_SIZE = 16
 LOCATION_SHIFT = 32
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
@@ -165,8 +166,8 @@ def find_overlaps(
 ) -> OverlapResult:
     """Count distinct overlaps and retain bounded deterministic samples."""
 
-    if window < 2:
-        raise ScanError("window must be at least 2 tokens")
+    if not 2 <= window <= MAX_WINDOW:
+        raise ScanError(f"window must be between 2 and {MAX_WINDOW} tokens")
     if max_reports < 1:
         raise ScanError("max_reports must be positive")
 
@@ -257,8 +258,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.window < 2:
-        print("error: --window must be at least 2", file=sys.stderr)
+    if not 2 <= args.window <= MAX_WINDOW:
+        print(
+            f"error: --window must be between 2 and {MAX_WINDOW}",
+            file=sys.stderr,
+        )
         return 2
     try:
         source = scan_markdown(

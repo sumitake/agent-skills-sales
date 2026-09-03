@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -106,6 +107,11 @@ class PackValidationTests(unittest.TestCase):
         path.write_text("{", encoding="utf-8")
         self.assertTrue(any("invalid JSON" in error for error in self.errors()))
 
+    def test_deeply_nested_json_is_rejected_without_crashing(self) -> None:
+        path = self.root / "pack.json"
+        path.write_text("[" * 2_000 + "]" * 2_000, encoding="utf-8")
+        self.assertTrue(any("nesting exceeds" in error for error in self.errors()))
+
     def test_missing_eval_tag_is_rejected(self) -> None:
         path = self.root / "skills/sales-discovery/evals/evals.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -183,6 +189,41 @@ class PackValidationTests(unittest.TestCase):
         )
         path.write_text(text, encoding="utf-8")
         self.assertTrue(any("40-hex commit pin" in error for error in self.errors()))
+
+    def test_alternate_yaml_action_keys_cannot_bypass_pin_check(self) -> None:
+        path = self.root / ".github/workflows/validate.yml"
+        original = path.read_text(encoding="utf-8")
+        canonical = (
+            "      - name: Check out repository\n"
+            "        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        )
+        variants = (
+            "      - name: Check out repository\n"
+            "        \"uses\": actions/checkout@main",
+            "      - name: Check out repository\n"
+            "        uses : actions/checkout@main",
+            "      - {name: Check out repository, uses: actions/checkout@main}",
+        )
+        for variant in variants:
+            with self.subTest(variant=variant):
+                path.write_text(original.replace(canonical, variant, 1), encoding="utf-8")
+                self.assertTrue(
+                    any("40-hex commit pin" in error for error in self.errors())
+                )
+        path.write_text(original, encoding="utf-8")
+
+    def test_invalid_decoded_link_path_is_rejected_without_crashing(self) -> None:
+        self.append("README.md", "\n[invalid](%00)\n")
+        self.assertTrue(any("invalid local link path" in error for error in self.errors()))
+
+    def test_repository_file_bound_stops_before_skill_traversal(self) -> None:
+        generated = self.root / "skills/sales-discovery/generated"
+        generated.mkdir()
+        for index in range(validate_pack.MAX_FILES):
+            (generated / f"{index:04d}.txt").write_text("x", encoding="utf-8")
+        with mock.patch.object(Path, "rglob", side_effect=AssertionError("unbounded")):
+            errors = self.errors()
+        self.assertTrue(any("more than" in error for error in errors))
 
     def test_missing_public_repository_file_is_rejected(self) -> None:
         (self.root / ".github/CODEOWNERS").unlink()
@@ -292,6 +333,12 @@ class SourceOverlapTests(unittest.TestCase):
         (self.source / "tokens.md").write_text("one two", encoding="utf-8")
         with self.assertRaises(source_overlap.ScanError):
             self.scan(self.source, max_tokens=1)
+
+    def test_window_size_bound_is_enforced(self) -> None:
+        with self.assertRaises(source_overlap.ScanError):
+            source_overlap.find_overlaps(
+                [], [], window=source_overlap.MAX_WINDOW + 1
+            )
 
 
 if __name__ == "__main__":
