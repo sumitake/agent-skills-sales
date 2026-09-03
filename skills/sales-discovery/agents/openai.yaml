@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sales Discovery"
+  short_description: "Plan and debrief evidence-led discovery"
+  default_prompt: "Use $sales-discovery to prepare an evidence-led discovery call plan for this opportunity."

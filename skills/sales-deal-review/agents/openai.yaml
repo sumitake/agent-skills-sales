@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sales Deal Review"
+  short_description: "Review deals with causal discipline"
+  default_prompt: "Use $sales-deal-review to inspect this deal outcome without hindsight bias or unsupported causality."

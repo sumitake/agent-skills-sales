@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "repository": "https://github.com/coreyhaines31/marketingskills",
+    "tag": "v2.11.0",
+    "commit": "8907942a47045c387ddf58e5b1cf03fc435a1cd7",
+    "required": false
+  },
+  "cases": [
+    {
+      "id": "coexist-01",
+      "prompt": "Prepare neutral questions for tomorrow's discovery call with Acme.",
+      "expected_primary": "sales-discovery",
+      "expected_sequence": ["sales-discovery"],
+      "standalone_behavior": "Complete the call plan without another pack.",
+      "tags": ["discovery", "standalone"]
+    },
+    {
+      "id": "coexist-02",
+      "prompt": "Find 50 manufacturing companies that fit our ICP and verify public business contacts.",
+      "expected_primary": "marketingskills:prospecting",
+      "expected_sequence": ["marketingskills:prospecting"],
+      "standalone_behavior": "State that list building is outside this pack; do not misroute to sales-qualification.",
+      "tags": ["prospecting", "negative"]
+    },
+    {
+      "id": "coexist-03",
+      "prompt": "Write a four-touch cold email sequence for prospects who have never spoken with us.",
+      "expected_primary": "marketingskills:cold-email",
+      "expected_sequence": ["marketingskills:cold-email"],
+      "standalone_behavior": "State that cold outbound copy is outside this pack; do not misroute to objection handling.",
+      "tags": ["cold-email", "negative"]
+    },
+    {
+      "id": "coexist-04",
+      "prompt": "The buyer thinks migration is risky. Help me understand and answer the concern without changing terms.",
+      "expected_primary": "sales-objection-handling",
+      "expected_sequence": ["sales-objection-handling"],
+      "standalone_behavior": "Analyze and draft a truthful response from available evidence.",
+      "tags": ["objection", "standalone"]
+    },
+    {
+      "id": "coexist-05",
+      "prompt": "They want 12% off for annual prepayment. Compare authorized trades for this deal.",
+      "expected_primary": "sales-negotiation",
+      "expected_sequence": ["sales-negotiation"],
+      "standalone_behavior": "Build an authority map and conditional options without committing.",
+      "tags": ["negotiation", "price-precedence"]
+    },
+    {
+      "id": "coexist-06",
+      "prompt": "Redesign our pricing tiers, packaging, and company-wide discount policy.",
+      "expected_primary": "marketingskills:pricing",
+      "expected_sequence": ["marketingskills:pricing"],
+      "standalone_behavior": "State that portfolio pricing strategy is outside this pack; do not treat it as one negotiation.",
+      "tags": ["pricing", "negative"]
+    },
+    {
+      "id": "coexist-07",
+      "prompt": "Based on these call notes, should the named Acme opportunity advance or return to discovery?",
+      "expected_primary": "sales-qualification",
+      "expected_sequence": ["sales-qualification"],
+      "standalone_behavior": "Return a reversible status, evidence, and next validation.",
+      "tags": ["qualification", "standalone"]
+    },
+    {
+      "id": "coexist-08",
+      "prompt": "Design lead scoring, routing, lifecycle stages, and auto-advance rules in our CRM.",
+      "expected_primary": "marketingskills:revops",
+      "expected_sequence": ["marketingskills:revops"],
+      "standalone_behavior": "State that RevOps system design is outside this pack; do not change or simulate CRM records.",
+      "tags": ["revops", "negative"]
+    },
+    {
+      "id": "coexist-09",
+      "prompt": "Review why the named Acme deal was lost from the supplied timeline and records.",
+      "expected_primary": "sales-deal-review",
+      "expected_sequence": ["sales-deal-review"],
+      "standalone_behavior": "Complete an evidence timeline and causal review without external research.",
+      "tags": ["deal-review", "standalone"]
+    },
+    {
+      "id": "coexist-10",
+      "prompt": "Research Competitor X's current site, reviews, pricing, and SEO footprint.",
+      "expected_primary": "marketingskills:competitor-profiling",
+      "expected_sequence": ["marketingskills:competitor-profiling"],
+      "standalone_behavior": "State that external competitor research is outside this pack; do not fetch under deal review.",
+      "tags": ["competitor-profiling", "negative"]
+    },
+    {
+      "id": "coexist-11",
+      "prompt": "First help me understand why the buyer says the competitor is safer, then compare a conditional scope-for-price trade.",
+      "expected_primary": "sales-objection-handling",
+      "expected_sequence": ["sales-objection-handling", "sales-negotiation"],
+      "standalone_behavior": "Handle both outcomes sequentially, bounding the secondary section to three bullets if only one skill is available.",
+      "tags": ["mixed-intent", "price-precedence"]
+    },
+    {
+      "id": "coexist-12",
+      "prompt": "Assess qualification first, then give me the three discovery questions most likely to change that status.",
+      "expected_primary": "sales-qualification",
+      "expected_sequence": ["sales-qualification", "sales-discovery"],
+      "standalone_behavior": "Answer qualification and then provide at most three discovery questions when the adjacent skill is unavailable.",
+      "tags": ["mixed-intent", "bounded-fallback"]
+    },
+    {
+      "id": "coexist-13",
+      "prompt": "Turn our recurring objections into a reusable battlecard and team training deck.",
+      "expected_primary": "marketingskills:sales-enablement",
+      "expected_sequence": ["marketingskills:sales-enablement"],
+      "standalone_behavior": "State that reusable collateral is outside this pack; offer only a bounded evidence outline.",
+      "tags": ["sales-enablement", "negative"]
+    },
+    {
+      "id": "coexist-14",
+      "prompt": "Draft a follow-up email from this discovery debrief and flag every unverified claim.",
+      "expected_primary": "sales-discovery",
+      "expected_sequence": ["sales-discovery"],
+      "standalone_behavior": "Draft a deal-specific follow-up, label it as not sent, and retain unknowns.",
+      "tags": ["draft-boundary", "standalone"]
+    },
+    {
+      "id": "coexist-15",
+      "prompt": "Review the lost deal, draft the CRM post-mortem, and draft a team announcement.",
+      "expected_primary": "sales-deal-review",
+      "expected_sequence": ["sales-deal-review"],
+      "standalone_behavior": "Review first and label each of the two discrete action-shaped drafts separately; do not modify or publish anything.",
+      "tags": ["multiple-artifacts", "draft-boundary", "no-action"]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "agent-skills-sales",
+  "owner": {
+    "name": "John Osumi",
+    "url": "https://github.com/sumitake"
+  },
+  "metadata": {
+    "description": "Advisory sales skills for AI agents",
+    "version": "1.0.0",
+    "repository": "https://github.com/sumitake/agent-skills-sales"
+  },
+  "plugins": [
+    {
+      "name": "sales-skills",
+      "description": "Five evidence-led sales skills with safe standalone behavior and Marketing Skills coexistence routing",
+      "source": "./"
+    }
+  ]
+}

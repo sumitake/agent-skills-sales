@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sales Objection Handling"
+  short_description: "Respond to concerns without overclaiming"
+  default_prompt: "Use $sales-objection-handling to analyze this buyer concern and draft a truthful response."

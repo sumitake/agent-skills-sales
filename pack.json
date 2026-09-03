@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "name": "agent-skills-sales",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "https://github.com/sumitake/agent-skills-sales",
+  "skills": [
+    "sales-discovery",
+    "sales-objection-handling",
+    "sales-negotiation",
+    "sales-qualification",
+    "sales-deal-review"
+  ],
+  "concept_mapping": {
+    "discovery": "sales-discovery",
+    "active-listening": "sales-discovery/references/active-listening.md",
+    "objection-handling": "sales-objection-handling",
+    "negotiation": "sales-negotiation",
+    "qualifying-leads": "sales-qualification",
+    "deal-review-win-loss": "sales-deal-review"
+  },
+  "source_audits": [
+    {
+      "repository": "https://github.com/louisblythe/Sales-Skills",
+      "commit": "e0f13a6eb41be22fa1f8493b148077cdd6c6654a",
+      "use": "concepts-only-independent-rewrite",
+      "required_at_runtime": false
+    },
+    {
+      "repository": "https://github.com/coreyhaines31/marketingskills",
+      "tag": "v2.11.0",
+      "commit": "8907942a47045c387ddf58e5b1cf03fc435a1cd7",
+      "use": "coexistence-baseline-and-upstream-lineage",
+      "required_at_runtime": false
+    }
+  ]
+}

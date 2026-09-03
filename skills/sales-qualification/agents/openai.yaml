@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sales Qualification"
+  short_description: "Qualify opportunities from auditable evidence"
+  default_prompt: "Use $sales-qualification to assess this opportunity from the available evidence and identify what to validate next."

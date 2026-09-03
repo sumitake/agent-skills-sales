@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sales Negotiation"
+  short_description: "Prepare honest, authorized commercial trades"
+  default_prompt: "Use $sales-negotiation to compare safe options for this deal negotiation without committing terms."
