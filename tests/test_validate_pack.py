@@ -6,9 +6,8 @@ import shutil
 import stat
 import sys
 import tempfile
-import unittest
 from pathlib import Path
-from unittest import mock
+from unittest import TestCase, main, mock
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -30,7 +29,7 @@ source_overlap = load_module(
 )
 
 
-class PackValidationTests(unittest.TestCase):
+class PackValidationTests(TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name) / "repository"
@@ -127,6 +126,17 @@ class PackValidationTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         self.assertTrue(any("version must equal" in error for error in self.errors()))
 
+    def test_exact_concept_mapping_is_required(self) -> None:
+        path = self.root / "pack.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["concept_mapping"]["pipeline"] = payload["concept_mapping"].pop(
+            "discovery"
+        )
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertTrue(
+            any("exact audited concept map" in error for error in self.errors())
+        )
+
     def test_non_string_source_repository_is_rejected_without_crashing(self) -> None:
         path = self.root / "pack.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -219,11 +229,47 @@ class PackValidationTests(unittest.TestCase):
     def test_repository_file_bound_stops_before_skill_traversal(self) -> None:
         generated = self.root / "skills/sales-discovery/generated"
         generated.mkdir()
-        for index in range(validate_pack.MAX_FILES):
+        for index in range(validate_pack.MAX_ENTRIES):
             (generated / f"{index:04d}.txt").write_text("x", encoding="utf-8")
         with mock.patch.object(Path, "rglob", side_effect=AssertionError("unbounded")):
-            errors = self.errors()
+            errors, counts = validate_pack.validate_pack(self.root)
         self.assertTrue(any("more than" in error for error in errors))
+        self.assertEqual(0, counts["skills"])
+        with mock.patch("builtins.print"):
+            self.assertEqual(1, validate_pack.main([str(self.root)]))
+
+    def test_unreadable_inventory_fails_before_semantic_validation(self) -> None:
+        blocked = self.root / "blocked"
+        blocked.mkdir()
+        blocked = blocked.resolve()
+        real_scandir = validate_pack.os.scandir
+
+        def guarded_scandir(path):
+            if Path(path).resolve() == blocked:
+                raise PermissionError("synthetic denial")
+            return real_scandir(path)
+
+        with mock.patch.object(
+            validate_pack.os, "scandir", side_effect=guarded_scandir
+        ):
+            errors, counts = validate_pack.validate_pack(self.root)
+        self.assertTrue(any("cannot scan directory" in error for error in errors))
+        self.assertEqual(0, counts["skills"])
+
+    def test_invalid_utf8_text_is_rejected_without_crashing(self) -> None:
+        (self.root / "README.md").write_bytes(b"\xff")
+        self.assertTrue(any("cannot decode UTF-8" in error for error in self.errors()))
+
+    def test_oversized_text_read_is_rejected(self) -> None:
+        (self.root / "README.md").write_bytes(
+            b"x" * (validate_pack.MAX_TEXT_BYTES + 1)
+        )
+        self.assertTrue(
+            any(
+                "maximum" in error or "exceeds" in error
+                for error in self.errors()
+            )
+        )
 
     def test_missing_public_repository_file_is_rejected(self) -> None:
         (self.root / ".github/CODEOWNERS").unlink()
@@ -232,7 +278,7 @@ class PackValidationTests(unittest.TestCase):
         )
 
 
-class SourceOverlapTests(unittest.TestCase):
+class SourceOverlapTests(TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -312,11 +358,68 @@ class SourceOverlapTests(unittest.TestCase):
         with self.assertRaises(source_overlap.ScanError):
             self.scan(linked)
 
-    def test_file_count_bound_is_enforced(self) -> None:
+    def test_entry_count_bound_includes_non_markdown_and_directories(self) -> None:
+        nested = self.source / "nested"
+        nested.mkdir()
+        (self.source / "ignored.txt").write_text("one", encoding="utf-8")
+        (nested / "also-ignored.txt").write_text("two", encoding="utf-8")
+        with self.assertRaises(source_overlap.ScanError):
+            self.scan(self.source, max_entries=2)
+
+    def test_markdown_entry_count_bound_is_enforced(self) -> None:
         (self.source / "one.md").write_text("one", encoding="utf-8")
         (self.source / "two.md").write_text("two", encoding="utf-8")
         with self.assertRaises(source_overlap.ScanError):
-            self.scan(self.source, max_files=1)
+            self.scan(self.source, max_entries=1)
+
+    def test_git_metadata_is_pruned_but_other_hidden_content_is_scanned(self) -> None:
+        metadata = self.source / ".git"
+        metadata.mkdir()
+        for index in range(10):
+            (metadata / str(index)).write_text("metadata", encoding="utf-8")
+        hidden = self.source / ".hidden"
+        hidden.mkdir()
+        (hidden / "included.md").write_text("included", encoding="utf-8")
+        documents = self.scan(self.source, max_entries=3)
+        self.assertEqual(
+            [Path(".hidden/included.md")], [item.path for item in documents]
+        )
+
+    def test_unreadable_directory_is_a_terminal_scan_error(self) -> None:
+        blocked = self.source / "blocked"
+        blocked.mkdir()
+        blocked = blocked.resolve()
+        real_scandir = source_overlap.os.scandir
+
+        def guarded_scandir(path):
+            if Path(path).resolve() == blocked:
+                raise PermissionError("synthetic denial")
+            return real_scandir(path)
+
+        with mock.patch.object(
+            source_overlap.os, "scandir", side_effect=guarded_scandir
+        ):
+            with self.assertRaises(source_overlap.ScanError):
+                self.scan(self.source)
+
+    def test_invalid_utf8_markdown_is_a_terminal_scan_error(self) -> None:
+        (self.source / "invalid.md").write_bytes(b"\xff")
+        with self.assertRaises(source_overlap.ScanError):
+            self.scan(self.source)
+
+    def test_document_order_is_deterministic(self) -> None:
+        (self.source / "b.md").write_text("b", encoding="utf-8")
+        (self.source / "a.md").write_text("a", encoding="utf-8")
+        self.assertEqual(
+            [Path("a.md"), Path("b.md")],
+            [item.path for item in self.scan(self.source)],
+        )
+
+    def test_max_files_cli_name_remains_an_alias(self) -> None:
+        args = source_overlap.build_parser().parse_args(
+            ["--source", "source", "--target", "target", "--max-files", "7"]
+        )
+        self.assertEqual(7, args.max_entries)
 
     def test_file_size_bound_is_enforced(self) -> None:
         (self.source / "large.md").write_text("12345", encoding="utf-8")
@@ -342,4 +445,4 @@ class SourceOverlapTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

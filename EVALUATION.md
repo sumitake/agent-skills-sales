@@ -54,6 +54,6 @@ python3 scripts/check_source_overlap.py \
   --target ./skills
 ```
 
-The checker reports exact normalized twelve-word overlaps. It bounds the scanned file count, aggregate bytes, aggregate normalized tokens, comparison-window size, and retained report samples. The reported total remains exact: for each distinct shared phrase, the sample uses the first source and target paths in deterministic scan order. Digest collisions are resolved by comparing the complete token window before a match is counted.
+The checker reports exact normalized twelve-word overlaps. It bounds all traversed entries (including non-Markdown content), actual bytes read, aggregate normalized tokens, comparison-window size, and retained report samples. Git metadata is pruned, while other hidden directories remain in scope. An unreadable or partially traversed tree fails closed instead of producing a clean result. The reported total remains exact: for each distinct shared phrase, the sample uses the first source and target paths in deterministic scan order. Digest collisions are resolved by comparing the complete token window before a match is counted.
 
 A clean result is useful evidence against accidental copying, but it does not replace human provenance review or legal judgment.

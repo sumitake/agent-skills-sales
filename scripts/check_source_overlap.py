@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 DEFAULT_WINDOW = 12
-DEFAULT_MAX_FILES = 2_000
+DEFAULT_MAX_ENTRIES = 2_000
 DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_TOTAL_BYTES = 32 * 1024 * 1024
 DEFAULT_MAX_TOKENS = 500_000
@@ -57,10 +57,57 @@ def _tokens(text: str) -> tuple[str, ...]:
     return tuple(TOKEN_RE.findall(normalized))
 
 
+def _markdown_paths(root: Path, *, max_entries: int) -> list[Path]:
+    """Return deterministic Markdown paths from a fail-closed bounded walk."""
+
+    pending = [root]
+    paths: list[Path] = []
+    encountered = 0
+    while pending:
+        directory = pending.pop()
+        children: list[tuple[str, Path, bool, bool]] = []
+        try:
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    encountered += 1
+                    if encountered > max_entries:
+                        raise ScanError(
+                            f"input tree exceeds {max_entries} traversed entries"
+                        )
+                    path = Path(entry.path)
+                    try:
+                        if entry.is_symlink():
+                            raise ScanError(
+                                "symlink is not allowed: "
+                                f"{path.relative_to(root)}"
+                            )
+                        is_directory = entry.is_dir(follow_symlinks=False)
+                        is_file = entry.is_file(follow_symlinks=False)
+                    except OSError as exc:
+                        raise ScanError(
+                            f"cannot inspect {path.relative_to(root)}: {exc}"
+                        ) from exc
+                    children.append((entry.name, path, is_directory, is_file))
+        except OSError as exc:
+            raise ScanError(
+                f"cannot scan directory {directory.relative_to(root)}: {exc}"
+            ) from exc
+
+        directories: list[Path] = []
+        for name, path, is_directory, is_file in sorted(children):
+            if is_directory:
+                if name != ".git":
+                    directories.append(path)
+            elif is_file and path.suffix.casefold() == ".md":
+                paths.append(path)
+        pending.extend(reversed(directories))
+    return sorted(paths, key=lambda path: path.relative_to(root).as_posix())
+
+
 def scan_markdown(
     root: Path,
     *,
-    max_files: int = DEFAULT_MAX_FILES,
+    max_entries: int = DEFAULT_MAX_ENTRIES,
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
     max_total_bytes: int = DEFAULT_MAX_TOTAL_BYTES,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -70,51 +117,31 @@ def scan_markdown(
     if not root.is_dir() or root.is_symlink():
         raise ScanError(f"invalid or symlinked directory: {root}")
     root = root.resolve(strict=True)
-    if min(max_files, max_file_bytes, max_total_bytes, max_tokens) < 1:
+    if min(max_entries, max_file_bytes, max_total_bytes, max_tokens) < 1:
         raise ScanError("scan bounds must be positive integers")
 
-    paths: list[Path] = []
-    for current, dirnames, filenames in os.walk(root, followlinks=False):
-        base = Path(current)
-        dirnames.sort()
-        filenames.sort()
-        for dirname in tuple(dirnames):
-            directory = base / dirname
-            if directory.is_symlink():
-                raise ScanError(
-                    f"directory symlink is not allowed: {directory.relative_to(root)}"
-                )
-        for filename in filenames:
-            path = base / filename
-            if path.suffix.casefold() != ".md":
-                continue
-            if path.is_symlink():
-                raise ScanError(
-                    f"file symlink is not allowed: {path.relative_to(root)}"
-                )
-            paths.append(path)
-            if len(paths) > max_files:
-                raise ScanError(f"Markdown file count exceeds limit {max_files}")
+    paths = _markdown_paths(root, max_entries=max_entries)
 
     documents: list[Document] = []
     total_bytes = 0
     total_tokens = 0
-    for path in sorted(paths):
+    for path in paths:
         try:
-            size = path.stat().st_size
+            with path.open("rb") as handle:
+                payload = handle.read(max_file_bytes + 1)
         except OSError as exc:
-            raise ScanError(f"cannot stat {path}: {exc}") from exc
-        if size > max_file_bytes:
+            raise ScanError(f"cannot read Markdown {path}: {exc}") from exc
+        if len(payload) > max_file_bytes:
             raise ScanError(
                 f"file exceeds {max_file_bytes} bytes: {path.relative_to(root)}"
             )
-        total_bytes += size
+        total_bytes += len(payload)
         if total_bytes > max_total_bytes:
             raise ScanError(f"Markdown input exceeds {max_total_bytes} total bytes")
         try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise ScanError(f"cannot read UTF-8 Markdown {path}: {exc}") from exc
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ScanError(f"cannot decode UTF-8 Markdown {path}: {exc}") from exc
         tokens = _tokens(text)
         total_tokens += len(tokens)
         if total_tokens > max_tokens:
@@ -240,7 +267,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--target", required=True, type=Path)
     parser.add_argument("--window", type=_positive_int, default=DEFAULT_WINDOW)
-    parser.add_argument("--max-files", type=_positive_int, default=DEFAULT_MAX_FILES)
+    parser.add_argument(
+        "--max-entries",
+        "--max-files",
+        dest="max_entries",
+        type=_positive_int,
+        default=DEFAULT_MAX_ENTRIES,
+        help="maximum traversed entries per input tree (--max-files is an alias)",
+    )
     parser.add_argument(
         "--max-file-bytes", type=_positive_int, default=DEFAULT_MAX_FILE_BYTES
     )
@@ -267,14 +301,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         source = scan_markdown(
             args.source,
-            max_files=args.max_files,
+            max_entries=args.max_entries,
             max_file_bytes=args.max_file_bytes,
             max_total_bytes=args.max_total_bytes,
             max_tokens=args.max_tokens,
         )
         target = scan_markdown(
             args.target,
-            max_files=args.max_files,
+            max_entries=args.max_entries,
             max_file_bytes=args.max_file_bytes,
             max_total_bytes=args.max_total_bytes,
             max_tokens=args.max_tokens,

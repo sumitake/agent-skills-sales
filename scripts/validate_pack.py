@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import unquote
 
 
-MAX_FILES = 500
+MAX_ENTRIES = 500
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_JSON_DEPTH = 100
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -46,6 +46,14 @@ REQUIRED_SKILL_FILES = {
     "sales-negotiation": "references/negotiation-prep.md",
     "sales-qualification": "references/qualification-rubric.md",
     "sales-deal-review": "references/review-template.md",
+}
+REQUIRED_CONCEPT_MAPPING = {
+    "discovery": "sales-discovery",
+    "active-listening": "sales-discovery/references/active-listening.md",
+    "objection-handling": "sales-objection-handling",
+    "negotiation": "sales-negotiation",
+    "qualifying-leads": "sales-qualification",
+    "deal-review-win-loss": "sales-deal-review",
 }
 REQUIRED_DOCS = {
     "README.md",
@@ -94,19 +102,20 @@ def _read_text(path: Path, root: Path, errors: list[str]) -> str | None:
         errors.append(f"{_display(path, root)}: symlinks are not allowed")
         return None
     try:
-        size = path.stat().st_size
+        with path.open("rb") as handle:
+            payload = handle.read(MAX_TEXT_BYTES + 1)
     except OSError as exc:
-        errors.append(f"{_display(path, root)}: cannot stat file: {exc}")
+        errors.append(f"{_display(path, root)}: cannot read file: {exc}")
         return None
-    if size > MAX_TEXT_BYTES:
+    if len(payload) > MAX_TEXT_BYTES:
         errors.append(
-            f"{_display(path, root)}: file is {size} bytes; maximum is {MAX_TEXT_BYTES}"
+            f"{_display(path, root)}: file exceeds {MAX_TEXT_BYTES} bytes"
         )
         return None
     try:
-        return path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        errors.append(f"{_display(path, root)}: cannot read UTF-8 text: {exc}")
+        return payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        errors.append(f"{_display(path, root)}: cannot decode UTF-8 text: {exc}")
         return None
 
 
@@ -231,35 +240,62 @@ def parse_frontmatter(text: str, path: Path) -> tuple[dict[str, Any], str]:
 
 def _collect_entries(root: Path, errors: list[str]) -> tuple[list[Path], bool]:
     entries: list[Path] = []
-    for current, dirnames, filenames in os.walk(root, followlinks=False):
-        base = Path(current)
-        dirnames[:] = sorted(name for name in dirnames if name != ".git")
-        for name in list(dirnames):
-            path = base / name
-            entries.append(path)
-            if path.is_symlink():
-                errors.append(f"{_display(path, root)}: directory symlink is not allowed")
-                dirnames.remove(name)
-        for name in sorted(filenames):
-            path = base / name
-            entries.append(path)
-            if path.is_symlink():
-                errors.append(f"{_display(path, root)}: file symlink is not allowed")
-                continue
-            try:
-                size = path.stat().st_size
-            except OSError as exc:
-                errors.append(f"{_display(path, root)}: cannot stat file: {exc}")
-                continue
-            if size > MAX_TEXT_BYTES:
-                errors.append(
-                    f"{_display(path, root)}: file is {size} bytes; "
-                    f"maximum is {MAX_TEXT_BYTES}"
-                )
-        if len(entries) > MAX_FILES:
-            errors.append(f".: repository has more than {MAX_FILES} inspected entries")
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        children: list[tuple[str, Path, bool, bool, int | None]] = []
+        try:
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    path = Path(entry.path)
+                    entries.append(path)
+                    if len(entries) > MAX_ENTRIES:
+                        errors.append(
+                            f".: repository has more than {MAX_ENTRIES} "
+                            "inspected entries"
+                        )
+                        return entries, False
+                    try:
+                        if entry.is_symlink():
+                            errors.append(
+                                f"{_display(path, root)}: symlink is not allowed"
+                            )
+                            children.append((entry.name, path, False, False, None))
+                            continue
+                        is_directory = entry.is_dir(follow_symlinks=False)
+                        is_file = entry.is_file(follow_symlinks=False)
+                        size = (
+                            entry.stat(follow_symlinks=False).st_size
+                            if is_file
+                            else None
+                        )
+                    except OSError as exc:
+                        errors.append(
+                            f"{_display(path, root)}: cannot inspect entry: {exc}"
+                        )
+                        return entries, False
+                    children.append(
+                        (entry.name, path, is_directory, is_file, size)
+                    )
+        except OSError as exc:
+            errors.append(
+                f"{_display(directory, root)}: cannot scan directory: {exc}"
+            )
             return entries, False
-    return entries, True
+
+        directories: list[Path] = []
+        for name, path, is_directory, is_file, size in sorted(children):
+            if is_directory:
+                if name != ".git":
+                    directories.append(path)
+            elif is_file:
+                if size is not None and size > MAX_TEXT_BYTES:
+                    errors.append(
+                        f"{_display(path, root)}: file is {size} bytes; "
+                        f"maximum is {MAX_TEXT_BYTES}"
+                    )
+        pending.extend(reversed(directories))
+    return sorted(entries, key=lambda path: _display(path, root)), True
 
 
 def _extract_link_target(raw: str) -> str:
@@ -630,17 +666,10 @@ def _validate_pack_manifest(root: Path, errors: list[str]) -> tuple[str, list[st
         errors.append("pack.json: skills contains duplicates")
 
     mapping = manifest.get("concept_mapping")
-    if not isinstance(mapping, dict) or len(mapping) != 6:
-        errors.append("pack.json: concept_mapping must contain the six audited concepts")
-    else:
-        for concept, target in mapping.items():
-            if not isinstance(concept, str) or not isinstance(target, str):
-                errors.append("pack.json: concept_mapping keys and values must be strings")
-                continue
-            if target in REQUIRED_SKILLS:
-                continue
-            if not (root / "skills" / target).is_file():
-                errors.append(f"pack.json: concept {concept!r} has missing target {target!r}")
+    if mapping != REQUIRED_CONCEPT_MAPPING:
+        errors.append(
+            "pack.json: concept_mapping must equal the exact audited concept map"
+        )
 
     audits = manifest.get("source_audits")
     if not isinstance(audits, list):
