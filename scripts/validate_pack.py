@@ -260,8 +260,7 @@ def _collect_entries(root: Path, errors: list[str]) -> tuple[list[Path], bool]:
                             errors.append(
                                 f"{_display(path, root)}: symlink is not allowed"
                             )
-                            children.append((entry.name, path, False, False, None))
-                            continue
+                            return entries, False
                         is_directory = entry.is_dir(follow_symlinks=False)
                         is_file = entry.is_file(follow_symlinks=False)
                         size = (

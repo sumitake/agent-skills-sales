@@ -90,6 +90,18 @@ class PackValidationTests(TestCase):
         link.symlink_to("active-listening.md")
         self.assertTrue(any("symlink" in error for error in self.errors()))
 
+    def test_required_skill_directory_symlink_stops_semantic_validation(self) -> None:
+        skill = self.root / "skills/sales-discovery"
+        external = Path(self.temporary.name) / "external-skill"
+        shutil.move(skill, external)
+        skill.symlink_to(external, target_is_directory=True)
+        with mock.patch.object(
+            Path, "rglob", side_effect=AssertionError("semantic traversal")
+        ):
+            errors, counts = validate_pack.validate_pack(self.root)
+        self.assertTrue(any("symlink" in error for error in errors))
+        self.assertEqual(0, counts["skills"])
+
     def test_executable_skill_resource_is_rejected(self) -> None:
         path = self.root / "skills/sales-discovery/references/active-listening.md"
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
