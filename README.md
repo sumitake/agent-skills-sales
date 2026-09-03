@@ -48,10 +48,9 @@ npx skills add sumitake/agent-skills-sales --skill '*'
 
 `npx` downloads and executes the installer, so review that tool and choose an explicit version in governed environments. For a dependency-free manual installation, copy only the desired `skills/<name>/` directories into the skills directory documented by your client. Do not flatten a skill directory; its relative `references/` and `agents/` paths are part of the package.
 
-To check or apply updates made through the community installer:
+To apply updates to installations tracked by the community installer:
 
 ```bash
-npx skills check
 npx skills update
 ```
 
