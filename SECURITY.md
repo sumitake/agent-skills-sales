@@ -18,7 +18,7 @@ The pack does not send messages, contact people, schedule meetings, modify CRM d
 
 ## Reporting
 
-Report vulnerabilities through GitHub's private vulnerability-reporting feature when enabled. Avoid opening a public issue containing customer data, exploit details, credentials, or private sales artifacts.
+Report vulnerabilities through [GitHub's private security-advisory form](https://github.com/sumitake/agent-skills-sales/security/advisories/new). Avoid opening a public issue containing customer data, exploit details, credentials, or private sales artifacts.
 
 Useful reports include:
 

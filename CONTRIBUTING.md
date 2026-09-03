@@ -1,5 +1,7 @@
 # Contributing
 
+Participation in this project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities through the private path in [SECURITY.md](SECURITY.md), not through a pull request or public issue.
+
 ## Design constraints
 
 - Keep each skill advisory-only and self-contained.
@@ -19,6 +21,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 Also run the local Agent Skills validator for every changed skill and execute the relevant behavioral fixtures in an isolated client. Static validation must never be described as proof of model compliance.
+
+Use synthetic or thoroughly redacted fixtures. Never commit credentials, personal data, customer data, private sales artifacts, or unredacted model transcripts.
 
 ## Versioning
 

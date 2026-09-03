@@ -174,6 +174,22 @@ class PackValidationTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         self.assertTrue(any("invalid skill" in error for error in self.errors()))
 
+    def test_mutable_workflow_action_reference_is_rejected(self) -> None:
+        path = self.root / ".github/workflows/validate.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "actions/checkout@v7",
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+        self.assertTrue(any("40-hex commit pin" in error for error in self.errors()))
+
+    def test_missing_public_repository_file_is_rejected(self) -> None:
+        (self.root / ".github/CODEOWNERS").unlink()
+        self.assertTrue(
+            any("required public-repository file" in error for error in self.errors())
+        )
+
 
 class SourceOverlapTests(unittest.TestCase):
     def setUp(self) -> None:

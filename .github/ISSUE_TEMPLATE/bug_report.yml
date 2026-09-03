@@ -1,0 +1,72 @@
+name: Bug or unsafe behavior
+description: Report incorrect routing, packaging defects, or unsafe skill behavior.
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the pack. Use synthetic or thoroughly redacted examples only. Report exploitable vulnerabilities through the private security-advisory link instead.
+  - type: dropdown
+    id: affected-skill
+    attributes:
+      label: Affected skill or surface
+      options:
+        - sales-discovery
+        - sales-objection-handling
+        - sales-negotiation
+        - sales-qualification
+        - sales-deal-review
+        - Routing or coexistence
+        - Packaging or validation
+        - Unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Give the exact tag or commit when possible.
+      placeholder: v1.0.0 or 40-character commit SHA
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Agent client and version
+      description: Name the skills-compatible client and its version.
+      placeholder: Codex, Claude Code, Gemini CLI, OpenCode, or another client
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal redacted reproduction
+      description: Include the prompt, relevant synthetic artifact, selected skill, and repeatable steps.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: State what happened, including any unsafe action claim, missing draft label, or routing collision.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation evidence
+      description: List checks already run and whether the behavior reproduces with only this pack installed.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: I removed credentials, personal data, customer data, private sales artifacts, and exploitable security details.
+          required: true

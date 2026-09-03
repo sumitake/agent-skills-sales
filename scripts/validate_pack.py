@@ -22,6 +22,10 @@ MAX_TEXT_BYTES = 2 * 1024 * 1024
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+ACTION_USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
+PINNED_ACTION_RE = re.compile(
+    r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$"
+)
 CODE_EXTENSIONS = {".py", ".sh", ".js", ".mjs", ".ts", ".rb", ".pl"}
 REQUIRED_SKILLS = {
     "sales-discovery",
@@ -40,12 +44,24 @@ REQUIRED_SKILL_FILES = {
 REQUIRED_DOCS = {
     "README.md",
     "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
     "EVALUATION.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "docs/compatibility.md",
     "docs/marketing-skills-integration.md",
+}
+REQUIRED_REPOSITORY_FILES = {
+    ".github/CODEOWNERS",
+    ".github/FUNDING.yml",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/dependabot.yml",
+    ".github/pull_request_template.md",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/validate.yml",
 }
 SAFETY_MARKERS = {
     "advisory heading": "## Advisory boundary",
@@ -275,6 +291,32 @@ def _validate_markdown_links(root: Path, files: list[Path], errors: list[str]) -
                         continue
             if not resolved.exists():
                 errors.append(f"{_display(path, root)}: broken local link: {target!r}")
+
+
+def _validate_workflow_action_pins(root: Path, errors: list[str]) -> None:
+    """Require immutable full-SHA references for every external workflow action."""
+
+    workflows = root / ".github" / "workflows"
+    if not workflows.is_dir() or workflows.is_symlink():
+        return
+    for path in sorted(workflows.iterdir()):
+        if not path.is_file() or path.is_symlink() or path.suffix not in {".yml", ".yaml"}:
+            continue
+        text = _read_text(path, root, errors)
+        if text is None:
+            continue
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            match = ACTION_USES_RE.match(line)
+            if not match:
+                continue
+            reference = match.group(1).strip("'\"")
+            if reference.startswith("./"):
+                continue
+            if not PINNED_ACTION_RE.fullmatch(reference):
+                errors.append(
+                    f"{_display(path, root)}:{line_number}: external action must use "
+                    f"a lowercase 40-hex commit pin: {reference!r}"
+                )
 
 
 def _validate_openai_yaml(path: Path, skill_name: str, root: Path, errors: list[str]) -> None:
@@ -770,9 +812,14 @@ def validate_pack(root: Path) -> tuple[list[str], dict[str, int]]:
         if not (root / required).is_file():
             errors.append(f"{required}: required documentation is missing")
 
+    for required in sorted(REQUIRED_REPOSITORY_FILES):
+        if not (root / required).is_file():
+            errors.append(f"{required}: required public-repository file is missing")
+
     _validate_plugin_metadata(root, version, errors)
     coexistence_count = _validate_coexistence(root, errors)
     _validate_markdown_links(root, entries, errors)
+    _validate_workflow_action_pins(root, errors)
 
     banned_source = "agency" + "-agents"
     placeholder = "TO" + "DO"

@@ -1,5 +1,9 @@
 # Agent Skills: Sales
 
+[![Validate skill pack](https://github.com/sumitake/agent-skills-sales/actions/workflows/validate.yml/badge.svg)](https://github.com/sumitake/agent-skills-sales/actions/workflows/validate.yml)
+[![CodeQL](https://github.com/sumitake/agent-skills-sales/actions/workflows/codeql.yml/badge.svg)](https://github.com/sumitake/agent-skills-sales/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Five evidence-led, advisory sales skills for skills-compatible agents:
 
 | Skill | Immediate job |
@@ -74,3 +78,5 @@ Exact source lineage, audit disposition, and licensing notes are recorded in [TH
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Contributions are welcome under [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
