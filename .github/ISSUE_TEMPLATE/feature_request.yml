@@ -1,0 +1,49 @@
+name: Skill or pack improvement
+description: Propose a bounded, evidence-led improvement to the skill pack.
+title: "[Enhancement]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals should preserve advisory-only behavior, standalone operation, and non-conflicting coexistence with neighboring skill packs.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the user outcome or recurring failure, not just a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Explain the bounded workflow, evidence inputs, and expected output.
+    validations:
+      required: true
+  - type: textarea
+    id: routing
+    attributes:
+      label: Routing and standalone boundary
+      description: State which skill should own the request, which neighbors must not trigger, and how it works when optional packs are absent.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Source and provenance notes
+      description: Link any concept source and identify its license. Do not paste third-party prompt text.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance examples
+      description: Provide synthetic positive, negative, mixed-intent, and safety-boundary examples where relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This proposal does not require the skills to send, schedule, mutate CRM data, commit terms, or invoke integrations.
+          required: true

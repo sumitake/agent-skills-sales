@@ -1,0 +1,12 @@
+{
+  "name": "sales-skills",
+  "description": "Evidence-led advisory skills for sales discovery, objections, negotiation, qualification, and deal review",
+  "version": "1.0.0",
+  "author": {
+    "name": "John Osumi"
+  },
+  "homepage": "https://github.com/sumitake/agent-skills-sales",
+  "repository": "https://github.com/sumitake/agent-skills-sales",
+  "license": "MIT",
+  "skills": "./skills"
+}
