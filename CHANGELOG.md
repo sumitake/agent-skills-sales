@@ -8,3 +8,5 @@ All notable changes to this project will be documented in this file.
 - Add standalone and Marketing Skills coexistence routing.
 - Add untrusted-artifact, authority, consent, fairness, and anti-manipulation boundaries.
 - Add behavioral fixtures, dependency-free structural validation, and clean-room overlap checking.
+- Bound overlap-checker memory and report retention while preserving exact, collision-safe counts.
+- Reject malformed source-audit and coexistence fixture types without crashing validation.

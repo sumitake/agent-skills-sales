@@ -545,9 +545,23 @@ def _validate_pack_manifest(root: Path, errors: list[str]) -> tuple[str, list[st
     if not isinstance(audits, list):
         errors.append("pack.json: source_audits must be an array")
     else:
-        by_repo = {
-            item.get("repository"): item for item in audits if isinstance(item, dict)
-        }
+        by_repo: dict[str, dict[str, Any]] = {}
+        for index, item in enumerate(audits):
+            if not isinstance(item, dict):
+                continue
+            repository = item.get("repository")
+            if not isinstance(repository, str) or not repository:
+                errors.append(
+                    f"pack.json: source_audits[{index}].repository must be a "
+                    "nonempty string"
+                )
+                continue
+            if repository in by_repo:
+                errors.append(
+                    f"pack.json: duplicate source audit repository {repository!r}"
+                )
+                continue
+            by_repo[repository] = item
         sales = by_repo.get("https://github.com/louisblythe/Sales-Skills")
         if not isinstance(sales, dict) or sales.get("commit") != (
             "e0f13a6eb41be22fa1f8493b148077cdd6c6654a"
@@ -698,12 +712,16 @@ def _validate_coexistence(root: Path, errors: list[str]) -> int:
         if not isinstance(case.get("prompt"), str) or not case["prompt"].strip():
             errors.append(f"{prefix}: prompt must be nonempty")
         primary = case.get("expected_primary")
-        if primary not in allowed:
+        if not isinstance(primary, str) or primary not in allowed:
             errors.append(f"{prefix}: invalid expected_primary {primary!r}")
         sequence = case.get("expected_sequence")
-        if not isinstance(sequence, list) or not sequence or any(item not in allowed for item in sequence):
+        if (
+            not isinstance(sequence, list)
+            or not sequence
+            or not all(isinstance(item, str) and item in allowed for item in sequence)
+        ):
             errors.append(f"{prefix}: expected_sequence contains an invalid skill")
-        elif sequence[0] != primary:
+        elif isinstance(primary, str) and sequence[0] != primary:
             errors.append(f"{prefix}: expected_sequence must begin with expected_primary")
         if not isinstance(case.get("standalone_behavior"), str) or not case[
             "standalone_behavior"

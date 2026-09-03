@@ -121,6 +121,13 @@ class PackValidationTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         self.assertTrue(any("version must equal" in error for error in self.errors()))
 
+    def test_non_string_source_repository_is_rejected_without_crashing(self) -> None:
+        path = self.root / "pack.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["source_audits"][0]["repository"] = ["not", "a", "string"]
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertTrue(any("repository must be" in error for error in self.errors()))
+
     def test_openai_unknown_field_is_rejected(self) -> None:
         self.append(
             "skills/sales-discovery/agents/openai.yaml",
@@ -153,6 +160,20 @@ class PackValidationTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         self.assertTrue(any("price-precedence" in error for error in self.errors()))
 
+    def test_non_string_coexistence_primary_is_rejected_without_crashing(self) -> None:
+        path = self.root / "evals/coexistence.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["cases"][0]["expected_primary"] = {"skill": "sales-discovery"}
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertTrue(any("invalid expected_primary" in error for error in self.errors()))
+
+    def test_non_string_coexistence_sequence_is_rejected_without_crashing(self) -> None:
+        path = self.root / "evals/coexistence.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["cases"][0]["expected_sequence"] = [{"skill": "sales-discovery"}]
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertTrue(any("invalid skill" in error for error in self.errors()))
+
 
 class SourceOverlapTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -172,28 +193,55 @@ class SourceOverlapTests(unittest.TestCase):
     def test_exact_overlap_is_reported(self) -> None:
         (self.source / "a.md").write_text("one two three four five", encoding="utf-8")
         (self.target / "b.md").write_text("zero two three four nine", encoding="utf-8")
-        overlaps = source_overlap.find_overlaps(
+        result = source_overlap.find_overlaps(
             self.scan(self.source), self.scan(self.target), window=3
         )
-        self.assertEqual(["two three four"], [item.phrase for item in overlaps])
+        self.assertEqual(1, result.total)
+        self.assertEqual(
+            ["two three four"], [item.phrase for item in result.samples]
+        )
 
     def test_clean_trees_return_no_overlap(self) -> None:
         (self.source / "a.md").write_text("one two three", encoding="utf-8")
         (self.target / "b.md").write_text("four five six", encoding="utf-8")
         self.assertEqual(
-            [],
+            0,
             source_overlap.find_overlaps(
                 self.scan(self.source), self.scan(self.target), window=2
-            ),
+            ).total,
         )
 
     def test_unicode_normalization_and_casefold_are_applied(self) -> None:
         (self.source / "a.md").write_text("ＣＡＦÉ Value", encoding="utf-8")
         (self.target / "b.md").write_text("café value", encoding="utf-8")
-        overlaps = source_overlap.find_overlaps(
+        result = source_overlap.find_overlaps(
             self.scan(self.source), self.scan(self.target), window=2
         )
-        self.assertEqual("café value", overlaps[0].phrase)
+        self.assertEqual("café value", result.samples[0].phrase)
+
+    def test_reports_are_capped_while_total_remains_exact(self) -> None:
+        text = "one two three four five"
+        (self.source / "a.md").write_text(text, encoding="utf-8")
+        (self.target / "b.md").write_text(text, encoding="utf-8")
+        result = source_overlap.find_overlaps(
+            self.scan(self.source), self.scan(self.target), window=2, max_reports=1
+        )
+        self.assertEqual(4, result.total)
+        self.assertEqual(1, len(result.samples))
+
+    def test_digest_collisions_preserve_exact_matches(self) -> None:
+        (self.source / "a.md").write_text("one two red blue", encoding="utf-8")
+        (self.target / "b.md").write_text("red blue", encoding="utf-8")
+        original = source_overlap._window_digest
+        source_overlap._window_digest = lambda tokens, start, window: b"collision"
+        try:
+            result = source_overlap.find_overlaps(
+                self.scan(self.source), self.scan(self.target), window=2
+            )
+        finally:
+            source_overlap._window_digest = original
+        self.assertEqual(1, result.total)
+        self.assertEqual("red blue", result.samples[0].phrase)
 
     def test_symlink_is_rejected(self) -> None:
         (self.source / "real.md").write_text("text", encoding="utf-8")
@@ -223,6 +271,11 @@ class SourceOverlapTests(unittest.TestCase):
         (self.source / "two.md").write_text("456", encoding="utf-8")
         with self.assertRaises(source_overlap.ScanError):
             self.scan(self.source, max_total_bytes=5)
+
+    def test_token_count_bound_is_enforced(self) -> None:
+        (self.source / "tokens.md").write_text("one two", encoding="utf-8")
+        with self.assertRaises(source_overlap.ScanError):
+            self.scan(self.source, max_tokens=1)
 
 
 if __name__ == "__main__":
