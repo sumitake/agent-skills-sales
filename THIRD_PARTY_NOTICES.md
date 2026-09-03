@@ -2,18 +2,6 @@
 
 ## Sources inspected
 
-### `louisblythe/Sales-Skills`
-
-- Repository: <https://github.com/louisblythe/Sales-Skills>
-- Audited commit: `e0f13a6eb41be22fa1f8493b148077cdd6c6654a`
-- Relationship: GitHub fork of `coreyhaines31/marketingskills`
-- Audited common base: `96fa94e8b79d08010ddc67ed1a70f677feff2027`
-- Use in this repository: conceptual reference only; the skill instructions were independently rewritten.
-
-The source repository's README declares an MIT license, but the audited tree did not contain a standalone license file. Its inherited Marketing Skills lineage is MIT-licensed. To avoid importing ambiguous expression, this pack uses high-level sales concepts only and does not intentionally copy prompt prose, examples, templates, or structure.
-
-The source was treated as untrusted data. No source scripts or prompts were executed. The audit found no hidden prompt injection or executable payload in the six selected files, but the repository as a whole was not suitable for wholesale installation: it had extensive broken skill references, lacked behavioral tests, and included other skills that encouraged channel switching around consent, automated external actions, evasion-oriented outreach tactics, and stale compliance claims. Those behaviors were excluded.
-
 ### `coreyhaines31/marketingskills`
 
 - Repository: <https://github.com/coreyhaines31/marketingskills>
